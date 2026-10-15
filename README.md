@@ -9,7 +9,7 @@ A small three.js puzzle game for the start.ng platform. Record a run, then race 
 
 ## How to play
 
-- Run 1: walk to the orange plate and stand on it. You have 9 seconds, and everything you do is recorded as your ghost.
+- Run 1: walk to the orange plate and stand on it. You have 10 seconds, and everything you do is recorded as your ghost.
 - Run 2: your ghost repeats Run 1 and holds the plate, so the door opens. Get through the door to the pink pad before the ghost vanishes and the door shuts.
 - Missing the door costs a heart. Three hearts, then a one-hour wait.
 - Keys: arrows or W A S D to move, Shift to sprint, V to switch the camera, R to restart a run, C to start over, O to change outfit.
