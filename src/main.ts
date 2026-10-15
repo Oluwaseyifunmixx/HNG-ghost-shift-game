@@ -1,5 +1,17 @@
 import * as THREE from 'three';
 import './style.css';
+import {
+  buildPerson,
+  escapeHtml,
+  getPlatformCharacter,
+  isCustomizerOpen,
+  loadCharacter,
+  openCustomizer,
+  saveCharacter,
+  setGhostAppearance,
+} from './character';
+import type { Character, Person } from './character';
+import { IS_TOUCH, createTouchControls } from './touch';
 
 // ---------- Level data: everything about a level lives here ----------
 // A Rect is a box on the floor. x and z are its centre.
@@ -48,23 +60,9 @@ const level = {
   ] as Furniture[],
 };
 
-// ---------- The character is just data ----------
-// Later the platform will give us this. For now it is a stand-in.
-type Character = {
-  skin: number;
-  hair: number;
-  top: number;
-  trousers: number;
-  shoes: number;
-};
-
-const outfits: Character[] = [
-  { skin: 0xf1c27d, hair: 0x2b1d14, top: 0x4cc9f0, trousers: 0x2a3a5c, shoes: 0x16181d },
-  { skin: 0x8d5524, hair: 0x0e0b09, top: 0xf4a261, trousers: 0x3b3f4a, shoes: 0xf5f5f0 },
-  { skin: 0xc68642, hair: 0xb5651d, top: 0x9b5de5, trousers: 0x1d2433, shoes: 0xe9c46a },
-  { skin: 0xffdbac, hair: 0xd9d4c7, top: 0x2ecc71, trousers: 0x5b3a29, shoes: 0x2b303b },
-];
-let outfitIndex = 0;
+// ---------- Your character: the platform's, or the one you made ----------
+let currentLook: Character = getPlatformCharacter() ?? loadCharacter();
+setGhostAppearance(currentLook);
 
 // ---------- Game settings you can tune ----------
 const SAMPLE_INTERVAL = 1 / 30; // seconds between two recording "photos"
@@ -76,14 +74,14 @@ const MAX_GHOSTS = 1; // Run 2 cannot be saved as a second ghost (for now)
 
 const SPEED = 5; // how far the person moves each second
 const SPRINT_MULTIPLIER = 1.6; // holding Shift: 1.6 times faster
-const STAMINA_DRAIN = 1 / 3.5; // sprinting empties the bar in 2.5 seconds
+const STAMINA_DRAIN = 1 / 3.5; // sprinting empties the bar in 3.5 seconds
 const STAMINA_RECHARGE = 1 / 6; // and it refills in 6 seconds
 const STAMINA_RESUME = 0.3; // after running dry, you need 30% to sprint again
 
 // Lives: missing the door in Run 2 costs a heart.
 const MAX_HEARTS = 3;
 const LOCKOUT_MINUTES = 5; // wait after the last heart. Try 0.2 to test (12 s)
-const ENABLE_TEST_KEYS = false; // L refills your hearts. Remove before publishing
+const ENABLE_TEST_KEYS = false; // L refills your hearts. Keep off when publishing
 const STORAGE_KEY = 'ghostShift.lives.v1';
 
 // ---------- Look and feel: tune these if it is too dark or too bright ----------
@@ -196,7 +194,7 @@ function showMessage(text: string) {
 
 // 1. The renderer paints the 3D world onto a canvas on the page.
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, IS_TOUCH ? 1.5 : 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true; // lights can cast shadows
 renderer.toneMapping = THREE.ACESFilmicToneMapping; // a more "film" look
@@ -263,7 +261,7 @@ const moon = new THREE.DirectionalLight(0xcdd9ff, MOON_LIGHT);
 moon.position.set(-10, 20, 16);
 moon.target.position.set(0, 0, 1);
 moon.castShadow = true;
-moon.shadow.mapSize.set(2048, 2048);
+moon.shadow.mapSize.set(IS_TOUCH ? 1024 : 2048, IS_TOUCH ? 1024 : 2048);
 moon.shadow.camera.left = -24;
 moon.shadow.camera.right = 24;
 moon.shadow.camera.top = 16;
@@ -993,103 +991,8 @@ addPendantLamp(-10, 0.8);
 addPendantLamp(6, 0.6);
 addPendantLamp(8.9, 2.8);
 
-// 13. The person: built from simple parts, coloured by the character data.
+// 13. The person. How it looks comes from the character data (character.ts).
 const PLAYER_SIZE = 1; // the collision box (not the visible size)
-const PERSON_SCALE = 1.35; // how big the person looks
-
-// One builder for everyone. The parts that swing are returned, so the
-// walking animation can move them.
-type Person = {
-  group: THREE.Group;
-  leftArm: THREE.Group;
-  rightArm: THREE.Group;
-  leftLeg: THREE.Group;
-  rightLeg: THREE.Group;
-  parts: { mesh: THREE.Mesh; key: keyof Character }[];
-};
-
-// The material every ghost shares: see-through blue that glows a little.
-const ghostMaterial = new THREE.MeshStandardMaterial({
-  color: 0x9be7ff,
-  emissive: 0x3aa0d8,
-  emissiveIntensity: 0.7,
-  transparent: true,
-  opacity: 0.45,
-  depthWrite: false,
-});
-
-function buildPerson(look: Character | null): Person {
-  const group = new THREE.Group();
-  group.scale.setScalar(PERSON_SCALE);
-  const parts: Person['parts'] = [];
-
-  // Make a part. With no character data (a ghost), use the ghost material.
-  function part(
-    geometry: THREE.BufferGeometry,
-    key: keyof Character,
-  ): THREE.Mesh {
-    const material = look
-      ? new THREE.MeshStandardMaterial({ color: look[key], roughness: 0.8 })
-      : ghostMaterial;
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = look !== null; // ghosts do not cast shadows
-    parts.push({ mesh, key });
-    return mesh;
-  }
-
-  // Legs: hang from a hip joint, so swinging looks natural.
-  function makeLeg(sideX: number): THREE.Group {
-    const joint = new THREE.Group();
-    joint.position.set(sideX, 0.6, 0);
-    const leg = part(new THREE.BoxGeometry(0.22, 0.5, 0.24), 'trousers');
-    leg.position.y = -0.25;
-    joint.add(leg);
-    const shoe = part(new THREE.BoxGeometry(0.24, 0.1, 0.34), 'shoes');
-    shoe.position.set(0, -0.55, 0.05);
-    joint.add(shoe);
-    group.add(joint);
-    return joint;
-  }
-
-  // Arms: hang from a shoulder joint.
-  function makeArm(sideX: number): THREE.Group {
-    const joint = new THREE.Group();
-    joint.position.set(sideX, 1.15, 0);
-    const sleeve = part(new THREE.BoxGeometry(0.18, 0.32, 0.2), 'top');
-    sleeve.position.y = -0.16;
-    joint.add(sleeve);
-    const hand = part(new THREE.BoxGeometry(0.16, 0.22, 0.18), 'skin');
-    hand.position.y = -0.43;
-    joint.add(hand);
-    group.add(joint);
-    return joint;
-  }
-
-  const leftLeg = makeLeg(-0.13);
-  const rightLeg = makeLeg(0.13);
-  const leftArm = makeArm(-0.33);
-  const rightArm = makeArm(0.33);
-
-  // Body.
-  const body = part(new THREE.BoxGeometry(0.5, 0.6, 0.28), 'top');
-  body.position.y = 0.9;
-  group.add(body);
-
-  // Head, with a hair cap on top and a small nose so you can see the front.
-  const head = part(new THREE.BoxGeometry(0.34, 0.34, 0.34), 'skin');
-  head.position.y = 1.44;
-  group.add(head);
-
-  const hair = part(new THREE.BoxGeometry(0.38, 0.14, 0.38), 'hair');
-  hair.position.y = 1.64;
-  group.add(hair);
-
-  const nose = part(new THREE.BoxGeometry(0.06, 0.06, 0.06), 'skin');
-  nose.position.set(0, 1.42, 0.2);
-  group.add(nose);
-
-  return { group, leftArm, rightArm, leftLeg, rightLeg, parts };
-}
 
 // Swing the arms and legs. "walk" is 0 (standing) to 1 (walking), and
 // "phase" is where we are in the walking cycle.
@@ -1110,18 +1013,19 @@ function turnTowards(group: THREE.Group, targetAngle: number, amount: number) {
 }
 
 // Your own person.
-const playerPerson = buildPerson(outfits[outfitIndex]);
+const playerPerson = buildPerson(currentLook);
 const player = playerPerson.group;
 player.position.set(level.start.x, 0, level.start.z);
 scene.add(player);
 
-// Put the next outfit on your person (a stand-in for the platform's character).
-function cycleOutfit() {
-  outfitIndex = (outfitIndex + 1) % outfits.length;
-  const look = outfits[outfitIndex];
-  for (const { mesh, key } of playerPerson.parts) {
-    (mesh.material as THREE.MeshStandardMaterial).color.setHex(look[key]);
-  }
+// Put a new look on your person, and remember it for next time.
+function applyLook(look: Character) {
+  currentLook = look;
+  playerPerson.rebuild(look);
+  setGhostAppearance(look);
+  saveCharacter(look);
+  // The sprint afterimages are ghost-shaped, so they follow your body type.
+  for (const item of afterimages) item.person.rebuild(null);
 }
 
 let playerWalkAmount = 0; // how much your person is walking (0 to 1)
@@ -1311,10 +1215,13 @@ function renderScreen() {
   screenEl.className = visible ? (dark ? 'show dark' : 'show') : '';
 
   if (state === 'menu') {
+    const who = currentLook.name.trim() || 'Explorer';
     screenEl.innerHTML =
       '<div class="card"><div class="logo">GHOST SHIFT</div>' +
       '<div class="tagline">Team up with your own past self.</div>' +
-      '<div class="cta">Click or press Enter to start</div></div>';
+      '<div class="cta">Click or press Enter to start</div>' +
+      `<div class="who">Playing as ${escapeHtml(who)}</div>` +
+      '<button class="customize" data-customize>Customise character (C)</button></div>';
   } else if (state === 'howto' && howtoPage === 0) {
     screenEl.innerHTML =
       '<div class="card"><div class="page">HOW TO PLAY · 1 / 2</div>' +
@@ -1332,17 +1239,17 @@ function renderScreen() {
       '<ol class="steps">' +
       '<li>Your ghost repeats Run 1 and holds the plate, so the <b>door opens</b>.</li>' +
       '<li>When its recording ends, the ghost vanishes and the door shuts.</li>' +
-      '<li>Get through the door onto the <b class="pink">pink pad</b> before that.</li>' +
-      '<li>Furniture blocks the straight route. Plan a path, and sprint where it counts.</li>' +
-      '<li>Press <kbd>V</kbd> to try the ceiling camera. Press it again to come back.</li>' +      `<li>Missing the door costs a <b class="red">heart</b>. You have ${MAX_HEARTS}. ` +
+      '<li>Get <b>through the door</b> before that.</li>' +
+            '<li>Furniture blocks the straight route. Plan a path, and sprint where it counts.</li>' +
+      '<li>Press <kbd>V</kbd> to try the ceiling camera. Press it again to come back.</li>' +
+      `<li>Missing the door costs a <b class="red">heart</b>. You have ${MAX_HEARTS}. ` +
       `Out of hearts? Wait ${lockoutText()} for a full refill.</li>` +
       '</ol><div class="keys">' +
       '<span><kbd>←↑↓→</kbd> or <kbd>W A S D</kbd> move</span>' +
       '<span><kbd>Shift</kbd> sprint</span>' +
       '<span><kbd>R</kbd> restart run</span>' +
       '<span><kbd>C</kbd> start over</span>' +
-      '<span><kbd>V</kbd> camera view</span>' +
-      '<span><kbd>O</kbd> outfit</span></div>' +
+      '<span><kbd>V</kbd> camera view</span></div>' +
       '<div class="cta">Click or press Enter to play</div></div>';
   } else if (state === 'failed') {
     screenEl.innerHTML =
@@ -1363,6 +1270,27 @@ function renderScreen() {
       '<p>All your hearts come back when the timer ends.</p></div>';
   } else {
     screenEl.innerHTML = '';
+  }
+
+  // Phones and tablets: say "tap", and name the touch buttons.
+  if (IS_TOUCH) {
+    screenEl.innerHTML = screenEl.innerHTML
+      .replace(/Click or press Enter/g, 'Tap')
+      .replace(' (C)', '')
+      .replace('Press <kbd>Enter</kbd> to save sooner', 'Tap <b>SAVE</b> to save sooner')
+      .replace(
+        'Press <kbd>V</kbd> to try the ceiling camera. Press it again to come back.',
+        'Tap <b>CAMERA</b> to try the ceiling camera. Tap it again to come back.',
+      );
+    const keysRow = screenEl.querySelector('.keys');
+    if (keysRow) {
+      keysRow.innerHTML =
+        '<span>Left thumb: move</span><span>SPRINT: hold to run faster</span>' +
+        '<span>SAVE · RESTART · CAMERA: buttons</span>';
+    }
+    if (state === 'failed' || state === 'won') {
+      screenEl.querySelector('.cta')?.remove();
+    }
   }
 }
 
@@ -1388,7 +1316,21 @@ function advanceScreens() {
   }
 }
 
-screenEl.addEventListener('click', () => {
+// The character screen. When it closes, the menu is drawn again.
+function openCharacterScreen() {
+  openCustomizer({
+    current: currentLook,
+    onChange: applyLook,
+    onClose: renderScreen,
+  });
+}
+
+screenEl.addEventListener('click', (event) => {
+  const target = event.target as HTMLElement;
+  if (target.closest('[data-customize]')) {
+    if (state === 'menu') openCharacterScreen();
+    return;
+  }
   if (state === 'menu' || state === 'howto') advanceScreens();
 });
 
@@ -1416,7 +1358,7 @@ type Ghost = {
 const ghosts: Ghost[] = [];
 
 function addGhost(ghostSamples: Sample[]) {
-  const person = buildPerson(null); // null = see-through blue
+  const person = buildPerson(null); // null = see-through, in your ghost colour
   person.group.position.set(ghostSamples[0].x, 0, ghostSamples[0].z);
   scene.add(person.group);
   ghosts.push({
@@ -1487,6 +1429,64 @@ function updateGhosts(deltaSeconds: number) {
     }
     ghost.walkPhase += deltaSeconds * 9 * Math.max(gait, 0.001);
     poseWalk(ghost.person, Math.min(1, gait), ghost.walkPhase);
+  }
+}
+
+// ---------- Afterimages: faint copies that fade behind you as you sprint ----------
+const AFTERIMAGE_COUNT = 9;
+const AFTERIMAGE_EVERY = 0.055; // seconds between copies
+const AFTERIMAGE_LIFE = 0.5; // seconds until a copy has faded
+const AFTERIMAGE_OPACITY = 0.4;
+
+type Afterimage = {
+  person: Person;
+  material: THREE.MeshStandardMaterial;
+  life: number;
+};
+const afterimages: Afterimage[] = [];
+for (let i = 0; i < AFTERIMAGE_COUNT; i++) {
+  const material = new THREE.MeshStandardMaterial({
+    color: 0x9be7ff,
+    emissive: 0x3aa0d8,
+    emissiveIntensity: 0.8,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  const person = buildPerson(null, material);
+  person.group.visible = false;
+  scene.add(person.group);
+  afterimages.push({ person, material, life: 0 });
+}
+let nextAfterimage = 0;
+let afterimageTimer = 0;
+let sprintingNow = false;
+
+function updateAfterimages(deltaSeconds: number) {
+  afterimageTimer -= deltaSeconds;
+  if (sprintingNow && state === 'playing' && afterimageTimer <= 0) {
+    afterimageTimer = AFTERIMAGE_EVERY;
+    const item = afterimages[nextAfterimage];
+    nextAfterimage = (nextAfterimage + 1) % afterimages.length;
+    item.life = AFTERIMAGE_LIFE;
+    item.material.color.setHex(currentLook.ghostColor);
+    item.material.emissive.setHex(currentLook.ghostColor);
+    item.material.emissive.multiplyScalar(0.55);
+    item.person.group.position.copy(player.position);
+    item.person.group.rotation.y = player.rotation.y;
+    item.person.leftArm.rotation.x = playerPerson.leftArm.rotation.x;
+    item.person.rightArm.rotation.x = playerPerson.rightArm.rotation.x;
+    item.person.leftLeg.rotation.x = playerPerson.leftLeg.rotation.x;
+    item.person.rightLeg.rotation.x = playerPerson.rightLeg.rotation.x;
+    item.person.group.visible = true;
+  }
+  for (const item of afterimages) {
+    if (item.life > 0) {
+      item.life -= deltaSeconds;
+      item.material.opacity =
+        Math.max(0, item.life / AFTERIMAGE_LIFE) * AFTERIMAGE_OPACITY;
+      if (item.life <= 0) item.person.group.visible = false;
+    }
   }
 }
 
@@ -1591,8 +1591,9 @@ function failRun() {
 function checkStageResult() {
   if (state !== 'playing' || !running) return;
 
-  // Reaching the pink pad wins the stage.
-  if (isOnExit()) {
+  
+   // Getting through the door wins the stage (the pink pad counts too).
+  if (isOnExit() || (ghosts.length > 0 && isPastDoor())) {
     setState('won');
     console.log('Stage complete');
     return;
@@ -1693,7 +1694,7 @@ function updateOverlays() {
   // The camera label and the mini map (only while a camera inside is on).
   const insideCamera = activeCam !== 'exterior';
   cctv.style.display = insideCamera ? 'flex' : 'none';
-   minimap.style.display =
+  minimap.style.display =
     insideCamera && viewMode === 'ceiling' ? 'block' : 'none';
   if (insideCamera) {
     const label = activeCam === 'balcony' ? 'CAM 02 · BALCONY' : 'CAM 01 · LIVING AREA';
@@ -1706,6 +1707,8 @@ function updateOverlays() {
 const heldKeys = new Set<string>();
 
 window.addEventListener('keydown', (event) => {
+  if (isCustomizerOpen()) return; // the character screen handles its own keys
+
   // Stop the arrow keys and the space bar from scrolling the page.
   if (event.code.startsWith('Arrow') || event.code === 'Space') {
     event.preventDefault();
@@ -1738,7 +1741,7 @@ window.addEventListener('keydown', (event) => {
   ) {
     restartStage();
   }
-  if (event.code === 'KeyO') cycleOutfit();
+  if (event.code === 'KeyC' && state === 'menu') openCharacterScreen();
 
   // Switch between the ceiling camera and the whole-house view.
   if (event.code === 'KeyV' && inGame()) {
@@ -1863,6 +1866,9 @@ function updatePlayer(deltaSeconds: number) {
     );
   }
 
+  // The afterimages only appear while you sprint.
+  sprintingNow = sprinting;
+
   // Stamina refills whenever you are not sprinting.
   if (!sprinting) {
     stamina = Math.min(1, stamina + STAMINA_RECHARGE * deltaSeconds);
@@ -1922,6 +1928,7 @@ refreshLives();
 renderHearts();
 setState(hearts === 0 ? 'locked' : 'menu');
 startRun();
+const touch = createTouchControls(() => state, () => isCustomizerOpen());
 
 // The game loop. The browser gives us the current time (in milliseconds)
 // every frame, and we work out how long the last frame took from that.
@@ -1934,12 +1941,14 @@ renderer.setAnimationLoop((time: number) => {
   lastTime = time;
 
   updatePlayer(deltaSeconds);
+  updateAfterimages(deltaSeconds);
   recordRun(deltaSeconds);
   updateGhosts(deltaSeconds);
   updatePlateAndDoor(deltaSeconds);
   checkStageResult();
   updateCamera(deltaSeconds);
   updateOverlays();
+  touch.update();
 
   // Things that move by themselves: the ceiling fans and the AC lights.
   for (const blades of fanBlades) {

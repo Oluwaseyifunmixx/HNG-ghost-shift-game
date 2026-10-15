@@ -379,3 +379,349 @@ kbd {
     opacity: 0.15;
   }
 }
+
+/* ---------- Character screen ---------- */
+.who {
+  margin-top: 14px;
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.customize {
+  margin-top: 12px;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: 1px solid #5b6a8f;
+  background: rgba(28, 34, 51, 0.9);
+  color: #e8ecf5;
+  font: inherit;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.customize:hover {
+  border-color: #9be7ff;
+  color: #9be7ff;
+}
+
+#customizer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 8, 13, 0.88);
+  color: #e8ecf5;
+  font-family: system-ui, 'Segoe UI', sans-serif;
+}
+
+.cz-panel {
+  display: flex;
+  gap: 24px;
+  width: min(900px, 94vw);
+  max-height: 92vh;
+  padding: 22px;
+  background: #121726;
+  border: 1px solid #2b3345;
+  border-radius: 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.cz-preview {
+  flex: 0 0 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cz-title {
+  letter-spacing: 0.2em;
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 6px;
+}
+
+.cz-stage canvas {
+  display: block;
+  touch-action: none;
+  cursor: grab;
+  width: 100% !important;
+  height: auto !important;
+}
+
+.cz-hint {
+  font-size: 12px;
+  opacity: 0.55;
+  margin-top: 6px;
+}
+
+.cz-controls {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.cz-label {
+  margin: 16px 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  opacity: 0.65;
+}
+
+.cz-label:first-child {
+  margin-top: 0;
+}
+
+.cz-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cz-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+
+.cz-swatch.on {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #4cc9f0;
+}
+
+.cz-choice {
+  padding: 7px 12px;
+  border-radius: 8px;
+  border: 1px solid #3a4560;
+  background: #1a2133;
+  color: #e8ecf5;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cz-choice.on {
+  background: #e0c070;
+  color: #1a1405;
+  border-color: #e0c070;
+}
+
+.cz-name {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid #3a4560;
+  background: #1a2133;
+  color: #e8ecf5;
+  font: inherit;
+  font-size: 15px;
+}
+
+.cz-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.cz-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid #3a4560;
+  background: #1a2133;
+  color: #e8ecf5;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.cz-btn.primary {
+  background: #4cc9f0;
+  border-color: #4cc9f0;
+  color: #06121a;
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .cz-panel {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .cz-preview {
+    flex: none;
+  }
+  .cz-controls {
+    overflow: visible;
+  }
+}
+
+/* ---------- Phones and tablets ---------- */
+html,
+body {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+
+.tc {
+  position: fixed;
+  z-index: 25;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+.tc-stick {
+  left: 24px;
+  bottom: 24px;
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(155, 231, 255, 0.35);
+}
+
+.tc-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  border-radius: 50%;
+  background: rgba(155, 231, 255, 0.35);
+  border: 2px solid rgba(155, 231, 255, 0.8);
+  pointer-events: none;
+}
+
+.tc-btn {
+  align-items: center;
+  justify-content: center;
+  color: #e8ecf5;
+  font: 700 14px system-ui, sans-serif;
+  letter-spacing: 0.08em;
+  background: rgba(28, 34, 51, 0.78);
+  border: 2px solid rgba(155, 231, 255, 0.5);
+  border-radius: 999px;
+  padding: 0;
+}
+
+.tc-btn.on {
+  background: rgba(244, 162, 97, 0.75);
+  border-color: #f4a261;
+}
+
+.tc-sprint {
+  right: 24px;
+  bottom: 24px;
+  width: 100px;
+  height: 100px;
+  font-size: 15px;
+}
+
+.tc-save {
+  right: 24px;
+  bottom: 136px;
+  height: 52px;
+  padding: 0 24px;
+}
+
+.tc-small {
+  top: 62px;
+  height: 40px;
+  padding: 0 14px;
+  font-size: 12px;
+}
+
+.tc-restart {
+  right: 18px;
+}
+
+.tc-view {
+  right: 118px;
+}
+
+.tc-center {
+  left: 50%;
+  bottom: 14%;
+  transform: translateX(-50%);
+  gap: 14px;
+}
+
+.tc-big {
+  min-width: 140px;
+  height: 56px;
+  padding: 0 22px;
+  font-size: 16px;
+  display: flex;
+}
+
+.tc-rotate {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: #080b13;
+  color: #e8ecf5;
+  font: 22px/1.6 system-ui, sans-serif;
+}
+
+.tc-rotate small {
+  opacity: 0.65;
+  font-size: 14px;
+}
+
+.tc-rotate-icon {
+  font-size: 56px;
+  margin-bottom: 8px;
+}
+
+/* The sprint bar moves up, so the joystick has the bottom left. */
+@media (pointer: coarse) {
+  #stamina {
+    left: 18px;
+    bottom: auto;
+    top: 56px;
+  }
+}
+
+/* Short screens (a phone on its side): make the cards and the character screen fit. */
+@media (max-height: 520px) {
+  .card {
+    padding: 14px 24px;
+    max-height: 100vh;
+    overflow-y: auto;
+  }
+  .logo {
+    font-size: 44px;
+  }
+  .card h2 {
+    font-size: 24px;
+  }
+  .steps {
+    font-size: 14px;
+    line-height: 1.5;
+    margin-top: 8px;
+  }
+  .cz-panel {
+    padding: 12px;
+    gap: 14px;
+  }
+  .cz-preview {
+    flex-basis: 170px;
+  }
+  .cz-stage canvas {
+    width: auto !important;
+    max-height: 210px;
+  }
+}
