@@ -1311,7 +1311,11 @@ function advanceScreens() {
     } else {
       setState('playing');
       startRun();
-      showMessage('Tip: press V to switch the camera');
+            showMessage(
+        IS_TOUCH
+          ? 'Tip: tap CAMERA to switch the view'
+          : 'Tip: press V to switch the camera',
+      );
     }
   }
 }
