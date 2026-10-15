@@ -82,7 +82,7 @@ const STAMINA_RESUME = 0.3; // after running dry, you need 30% to sprint again
 
 // Lives: missing the door in Run 2 costs a heart.
 const MAX_HEARTS = 3;
-const LOCKOUT_MINUTES = 60; // wait after the last heart. Try 0.2 to test (12 s)
+const LOCKOUT_MINUTES = 5; // wait after the last heart. Try 0.2 to test (12 s)
 const ENABLE_TEST_KEYS = false; // L refills your hearts. Remove before publishing
 const STORAGE_KEY = 'ghostShift.lives.v1';
 
