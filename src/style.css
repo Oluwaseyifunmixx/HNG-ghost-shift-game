@@ -794,3 +794,15 @@ kbd {
     max-height: 210px;
   }
 }
+/* ---------- start.ng sign-in and the character note ---------- */
+.cz-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+.customize + .customize,
+.card .customize {
+  margin-right: 8px;
+}

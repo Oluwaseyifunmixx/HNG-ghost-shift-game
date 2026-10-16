@@ -3,9 +3,16 @@ import * as THREE from 'three';
 // ---------- The character is just data ----------
 // The platform's character will replace this later (see getPlatformCharacter).
 export type BodyType = 'female' | 'male';
-export type HairStyle = 'short' | 'afro' | 'bun' | 'ponytail' | 'braids';
+export type HairStyle =
+  | 'short'
+  | 'afro'
+  | 'bun'
+  | 'ponytail'
+  | 'braids'
+  | 'dreads'
+  | 'bald';
 export type Hat = 'none' | 'cap' | 'beanie' | 'tophat' | 'crown' | 'halo';
-export type Face = 'none' | 'glasses' | 'goggles';
+export type Face = 'none' | 'glasses' | 'goggles' | 'earrings' | 'beard';
 export type Extra =
   | 'none'
   | 'scarf'
@@ -40,6 +47,8 @@ export const HAIR_STYLES: readonly Choice<HairStyle>[] = [
   { value: 'bun', label: 'Bun' },
   { value: 'ponytail', label: 'Ponytail' },
   { value: 'braids', label: 'Braids' },
+  { value: 'dreads', label: 'Dreads' },
+  { value: 'bald', label: 'Bald' },
 ];
 export const HATS: readonly Choice<Hat>[] = [
   { value: 'none', label: 'None' },
@@ -53,6 +62,8 @@ export const FACES: readonly Choice<Face>[] = [
   { value: 'none', label: 'None' },
   { value: 'glasses', label: 'Glasses' },
   { value: 'goggles', label: 'Time goggles' },
+  { value: 'earrings', label: 'Earrings' },
+  { value: 'beard', label: 'Beard' },
 ];
 export const EXTRAS: readonly Choice<Extra>[] = [
   { value: 'none', label: 'None' },
@@ -311,6 +322,17 @@ function fillPerson(
         place(box(0.07, 0.42, 0.07, c.hair), side * 0.17, 1.32, -0.1);
       }
       break;
+    case 'dreads':
+      hairCap();
+      for (const x of [-0.15, -0.05, 0.05, 0.15]) {
+        place(box(0.055, 0.4, 0.055, c.hair), x, 1.34, -0.19);
+      }
+      for (const side of [-1, 1]) {
+        place(box(0.055, 0.32, 0.055, c.hair), side * 0.19, 1.38, -0.04);
+      }
+      break;
+    case 'bald':
+      break;
   }
 
   // Hats.
@@ -364,6 +386,15 @@ function fillPerson(
       lens.rotation.x = Math.PI / 2;
       place(lens, side * 0.085, 1.57, 0.2);
     }
+  }
+
+  if (c.face === 'earrings') {
+    for (const side of [-1, 1]) {
+      place(box(0.04, 0.09, 0.04, GOLD, { metal: 0.6, rough: 0.3 }), side * 0.19, 1.37, 0.02);
+    }
+  } else if (c.face === 'beard') {
+    place(box(0.3, 0.12, 0.09, c.hair), 0, 1.34, 0.165);
+    place(box(0.34, 0.2, 0.05, c.hair), 0, 1.36, 0.14);
   }
 
   // Extras.
@@ -437,6 +468,9 @@ type CustomizerOptions = {
   current: Character;
   onChange: (look: Character) => void;
   onClose: () => void;
+  // When the character comes from start.ng, only the ghost's glow can be changed.
+  ghostOnly?: boolean;
+  note?: string;
 };
 type AnyChoice = { value: string; label: string };
 
@@ -585,6 +619,14 @@ export function openCustomizer(options: CustomizerOptions) {
     });
   };
 
+  if (options.note) {
+    const note = document.createElement('div');
+    note.className = 'cz-note';
+    note.textContent = options.note;
+    controls.appendChild(note);
+  }
+
+  if (!options.ghostOnly) {
   addChoices('BODY', 'body', BODIES);
 
   addLabel('NAME');
@@ -607,6 +649,7 @@ export function openCustomizer(options: CustomizerOptions) {
   addChoices('HAT', 'hat', HATS);
   addChoices('FACE', 'face', FACES);
   addChoices('EXTRA', 'extra', EXTRAS);
+  }
   addSwatches("YOUR GHOST'S GLOW", 'ghostColor', GHOST_COLOURS);
 
   const actions = document.createElement('div');
@@ -631,7 +674,7 @@ export function openCustomizer(options: CustomizerOptions) {
   done.className = 'cz-btn primary';
   done.textContent = 'Done';
   done.addEventListener('click', () => close());
-  actions.appendChild(surprise);
+  if (!options.ghostOnly) actions.appendChild(surprise);
   actions.appendChild(done);
   controls.appendChild(actions);
 

@@ -12,6 +12,7 @@ import {
 } from './character';
 import type { Character, Person } from './character';
 import { IS_TOUCH, createTouchControls } from './touch';
+import { cleanAddress, fetchPlayer, signInUrl } from './platform';
 
 // ---------- Level data: everything about a level lives here ----------
 // A Rect is a box on the floor. x and z are its centre.
@@ -61,8 +62,15 @@ const level = {
 };
 
 // ---------- Your character: the platform's, or the one you made ----------
-let currentLook: Character = getPlatformCharacter() ?? loadCharacter();
+// The character made inside this game. It is used when start.ng does not answer
+// (for example when testing on your own computer), so the game always works.
+let localLook: Character = loadCharacter();
+let currentLook: Character = getPlatformCharacter() ?? localLook;
 setGhostAppearance(currentLook);
+
+// Set once start.ng answers: is the look start.ng's, and is the player signed in?
+let fromPlatform = false;
+let signedIn = false;
 
 // ---------- Game settings you can tune ----------
 const SAMPLE_INTERVAL = 1 / 30; // seconds between two recording "photos"
@@ -1021,6 +1029,7 @@ scene.add(player);
 // Put a new look on your person, and remember it for next time.
 function applyLook(look: Character) {
   currentLook = look;
+  localLook = look;
   playerPerson.rebuild(look);
   setGhostAppearance(look);
   saveCharacter(look);
@@ -1216,12 +1225,14 @@ function renderScreen() {
 
   if (state === 'menu') {
     const who = currentLook.name.trim() || 'Explorer';
+    const asGuest = fromPlatform && !signedIn;
     screenEl.innerHTML =
       '<div class="card"><div class="logo">GHOST SHIFT</div>' +
       '<div class="tagline">Team up with your own past self.</div>' +
       '<div class="cta">Click or press Enter to start</div>' +
-      `<div class="who">Playing as ${escapeHtml(who)}</div>` +
-      '<button class="customize" data-customize>Customise character (C)</button></div>';
+      `<div class="who">Playing as ${escapeHtml(who)}${signedIn ? ' (start.ng)' : ''}</div>` +
+      (asGuest ? '<button class="customize" data-signin>Sign in with start.ng</button>' : '') +
+      `<button class="customize" data-customize>${fromPlatform ? 'Ghost glow' : 'Customise character (C)'}</button></div>`;
   } else if (state === 'howto' && howtoPage === 0) {
     screenEl.innerHTML =
       '<div class="card"><div class="page">HOW TO PLAY · 1 / 2</div>' +
@@ -1324,13 +1335,29 @@ function advanceScreens() {
 function openCharacterScreen() {
   openCustomizer({
     current: currentLook,
-    onChange: applyLook,
+    onChange: fromPlatform ? applyGhostGlow : applyLook,
     onClose: renderScreen,
+    ghostOnly: fromPlatform,
+    note: signedIn
+      ? "Your character comes from start.ng, so it looks the same in every game. You can still pick your ghost's glow here."
+      : "You are playing as a guest. Sign in with start.ng to play as your own character. You can still pick your ghost's glow here.",
   });
+}
+
+// When the character comes from start.ng, only the ghost's glow is yours to change.
+function applyGhostGlow(look: Character) {
+  localLook = { ...localLook, ghostColor: look.ghostColor };
+  saveCharacter(localLook);
+  currentLook = { ...currentLook, ghostColor: look.ghostColor };
+  setGhostAppearance(currentLook);
 }
 
 screenEl.addEventListener('click', (event) => {
   const target = event.target as HTMLElement;
+  if (target.closest('[data-signin]')) {
+    location.href = signInUrl();
+    return;
+  }
   if (target.closest('[data-customize]')) {
     if (state === 'menu') openCharacterScreen();
     return;
@@ -1933,6 +1960,43 @@ renderHearts();
 setState(hearts === 0 ? 'locked' : 'menu');
 startRun();
 const touch = createTouchControls(() => state, () => isCustomizerOpen());
+
+// Ask start.ng who is playing. If it answers, the player wears their start.ng
+// character (or start.ng's guest look). If it does not answer, the game keeps
+// the character made here, so it always works.
+let syncing = false;
+async function syncPlayer() {
+  if (syncing || isCustomizerOpen()) return;
+  syncing = true;
+  try {
+    const player = await fetchPlayer();
+    if (!player) return;
+    const next: Character = { ...player.look, ghostColor: localLook.ghostColor };
+    const changed =
+      !fromPlatform ||
+      signedIn !== player.signedIn ||
+      JSON.stringify(next) !== JSON.stringify(currentLook);
+    fromPlatform = true;
+    signedIn = player.signedIn;
+    if (changed) {
+      currentLook = next;
+      playerPerson.rebuild(next);
+      setGhostAppearance(next);
+      for (const item of afterimages) item.person.rebuild(null);
+      if (state === 'menu' && !isCustomizerOpen()) renderScreen();
+    }
+  } finally {
+    syncing = false;
+  }
+}
+
+cleanAddress();
+void syncPlayer();
+// The player may sign in or out on start.ng in another tab, so ask again on return.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void syncPlayer();
+});
+window.addEventListener('focus', () => void syncPlayer());
 
 // The game loop. The browser gives us the current time (in milliseconds)
 // every frame, and we work out how long the last frame took from that.
